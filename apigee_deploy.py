@@ -2,8 +2,8 @@ import sys
 import requests
 import os
 import zipfile
-import git
 import json
+import subprocess
 
 # Define each task as a function
 
@@ -17,8 +17,24 @@ def create_github_repo(api_name, github_token, github_user):
 
 def clone_and_prepare_template(api_name, template_url):
     repo_dir = os.path.join(os.getcwd(), api_name)
-    git.Repo.clone_from(template_url, repo_dir, branch='main')
-    os.rename(os.path.join(repo_dir, 'apiproxy', 'dcemi-statusInquiry-v1.xml'), os.path.join(repo_dir, 'apiproxy', f'{api_name}.xml'))
+    
+    # Clone the template repository using subprocess
+    try:
+        subprocess.check_call(['git', 'clone', template_url, repo_dir])
+        print(f"Repository cloned to {repo_dir}")
+    except subprocess.CalledProcessError as e:
+        print(f"Failed to clone repository: {e}")
+        sys.exit(1)
+    
+    # Rename the template XML file
+    original_file = os.path.join(repo_dir, 'apiproxy', 'dcemi-statusInquiry-v1.xml')
+    new_file = os.path.join(repo_dir, 'apiproxy', f'{api_name}.xml')
+    if os.path.exists(original_file):
+        os.rename(original_file, new_file)
+        print(f"Renamed {original_file} to {new_file}")
+    else:
+        print(f"File {original_file} not found.")
+    
     print("Template cloned and prepared.")
     return repo_dir
 
