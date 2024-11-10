@@ -40,6 +40,10 @@ def modify_xml_file(api_name, repo_dir, base_path, target_server_name, hostname,
         file.write(content)
 
 def generate_config_json(api_name, repo_dir, base_path, target_server_name, hostname, port, environment):
+    # Ensure directory exists
+    if not os.path.exists(repo_dir):
+        os.makedirs(repo_dir)
+
     config = {
         "API_NAME": api_name,
         "BASE_PATH": base_path,
