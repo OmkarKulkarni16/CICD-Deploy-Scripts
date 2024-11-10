@@ -79,9 +79,9 @@ def push_to_feature_branch(repo_dir, feature_branch, commit_message):
     subprocess.check_call(['git', '-C', repo_dir, 'commit', '-m', commit_message])
     subprocess.check_call(['git', '-C', repo_dir, 'push', '-u', 'origin', feature_branch])
 
-def extract_template(destination_dir):
-    # Hardcoded path to the JoseHigh.zip file
-    zip_path = os.path.join(os.getcwd(), "templates", "JoseHigh.zip")
+def extract_template(destination_dir, api_name, base_path, target_server_name, hostname, port, environment):
+    # Path to JoseHigh.zip within the cloned apigee-proxy-templates repository
+    zip_path = os.path.join(os.getcwd(), "apigee-proxy-templates", "templates", "JoseHigh.zip")
 
     # Check if the zip file exists
     if not os.path.exists(zip_path):
@@ -98,6 +98,28 @@ def extract_template(destination_dir):
     
     print(f"Extracted {zip_path} to {destination_dir}")
 
+    # Rename and modify XML files as necessary
+    apiproxy_dir = os.path.join(destination_dir, 'apiproxy')
+
+    # Rename XML file to match API name
+    original_file = os.path.join(apiproxy_dir, 'dcemi-statusInquiry-v1.xml')
+    renamed_file = os.path.join(apiproxy_dir, f'{api_name}.xml')
+    if os.path.exists(original_file):
+        os.rename(original_file, renamed_file)
+        print(f"Renamed {original_file} to {renamed_file}")
+
+    # Modify XML file contents with provided parameters
+    with open(renamed_file, 'r') as file:
+        content = file.read()
+    content = content.replace('dcemi-statusInquiry-v1', api_name)
+    content = content.replace('<BasePaths>/api/v1/dcemi-statusInquiry</BasePaths>', f'<BasePaths>{base_path}</BasePaths>')
+    content = content.replace('<Server name="OsbseSoaUatHdfcBankCom-5142"/>', f'<Server name="{target_server_name}"/>')
+    content = content.replace('http://default-host', f'http://{hostname}:{port}')
+    content = content.replace('default-environment', environment)
+    with open(renamed_file, 'w') as file:
+        file.write(content)
+    print("Updated XML configurations in the renamed file.")
+
 # Main function to run the specified task
 if __name__ == "__main__":
     task = sys.argv[1]
@@ -112,8 +134,9 @@ if __name__ == "__main__":
         api_name, template_url = sys.argv[2], sys.argv[3]
         clone_and_prepare_template(api_name, template_url)
     elif task == "extract_template":
-        destination_dir = sys.argv[2]
-        extract_template(destination_dir)
+        api_name, base_path, target_server_name, hostname, port, environment = sys.argv[2:]
+        destination_dir = os.path.join(os.getcwd(), api_name)
+        extract_template(destination_dir, api_name, base_path, target_server_name, hostname, port, environment)
     elif task == "modify_xml_file":
         api_name, repo_dir, base_path, target_server_name, hostname, port, environment = sys.argv[2:]
         modify_xml_file(api_name, repo_dir, base_path, target_server_name, hostname, port, environment)
