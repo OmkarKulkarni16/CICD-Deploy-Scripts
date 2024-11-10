@@ -4,8 +4,13 @@ import os
 import zipfile
 import json
 import subprocess
+import shutil
 
-# Define each task as a function
+def clean_workspace(api_name):
+    repo_dir = os.path.join(os.getcwd(), api_name)
+    if os.path.exists(repo_dir):
+        shutil.rmtree(repo_dir)
+    print(f"Cleaned workspace for {api_name}")
 
 def create_github_repo(api_name, github_token, github_user):
     headers = {'Authorization': f'token {github_token}'}
@@ -17,26 +22,22 @@ def create_github_repo(api_name, github_token, github_user):
 
 def clone_and_prepare_template(api_name, template_url):
     repo_dir = os.path.join(os.getcwd(), api_name)
-    
-    # Clone the template repository using subprocess
-    try:
-        subprocess.check_call(['git', 'clone', template_url, repo_dir])
-        print(f"Repository cloned to {repo_dir}")
-    except subprocess.CalledProcessError as e:
-        print(f"Failed to clone repository: {e}")
-        sys.exit(1)
-    
-    # Rename the template XML file
+    subprocess.check_call(['git', 'clone', template_url, repo_dir])
     original_file = os.path.join(repo_dir, 'apiproxy', 'dcemi-statusInquiry-v1.xml')
     new_file = os.path.join(repo_dir, 'apiproxy', f'{api_name}.xml')
     if os.path.exists(original_file):
         os.rename(original_file, new_file)
-        print(f"Renamed {original_file} to {new_file}")
-    else:
-        print(f"File {original_file} not found.")
-    
     print("Template cloned and prepared.")
     return repo_dir
+
+def modify_xml_file(api_name, repo_dir, base_path, target_server_name, hostname, port, environment):
+    xml_file = os.path.join(repo_dir, 'apiproxy', f'{api_name}.xml')
+    with open(xml_file, 'r') as file:
+        content = file.read()
+    content = content.replace('dcemi-statusInquiry-v1', api_name)
+    content = content.replace('<BasePaths>/api/v1/dcemi-statusInquiry</BasePaths>', f'<BasePaths>{base_path}</BasePaths>')
+    with open(xml_file, 'w') as file:
+        file.write(content)
 
 def generate_config_json(api_name, repo_dir, base_path, target_server_name, hostname, port, environment):
     config = {
@@ -62,18 +63,69 @@ def zip_apiproxy(api_name, repo_dir):
     print("apiproxy zipped.")
     return zip_path
 
+def initialize_repo(repo_dir, github_token, repo_url):
+    subprocess.check_call(['git', '-C', repo_dir, 'init'])
+    subprocess.check_call(['git', '-C', repo_dir, 'remote', 'add', 'origin', repo_url])
+    subprocess.check_call(['git', '-C', repo_dir, 'checkout', '-b', 'main'])
+    subprocess.check_call(['git', '-C', repo_dir, 'commit', '--allow-empty', '-m', 'Initial commit'])
+    subprocess.check_call(['git', '-C', repo_dir, 'push', '-u', 'origin', 'main'])
+    subprocess.check_call(['git', '-C', repo_dir, 'checkout', '-b', 'develop'])
+    subprocess.check_call(['git', '-C', repo_dir, 'commit', '--allow-empty', '-m', 'Initial commit for develop'])
+    subprocess.check_call(['git', '-C', repo_dir, 'push', '-u', 'origin', 'develop'])
+
+def push_to_feature_branch(repo_dir, feature_branch, commit_message):
+    subprocess.check_call(['git', '-C', repo_dir, 'checkout', '-b', feature_branch])
+    subprocess.check_call(['git', '-C', repo_dir, 'add', '.'])
+    subprocess.check_call(['git', '-C', repo_dir, 'commit', '-m', commit_message])
+    subprocess.check_call(['git', '-C', repo_dir, 'push', '-u', 'origin', feature_branch])
+
+def extract_template(destination_dir):
+    # Hardcoded path to the JoseHigh.zip file
+    zip_path = os.path.join(os.getcwd(), "templates", "JoseHigh.zip")
+
+    # Check if the zip file exists
+    if not os.path.exists(zip_path):
+        print(f"Zip file not found at {zip_path}")
+        return
+
+    # Create the destination directory if it doesn't exist
+    if not os.path.exists(destination_dir):
+        os.makedirs(destination_dir)
+        
+    # Extract the zip file
+    with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+        zip_ref.extractall(destination_dir)
+    
+    print(f"Extracted {zip_path} to {destination_dir}")
+
 # Main function to run the specified task
 if __name__ == "__main__":
     task = sys.argv[1]
-    if task == "create_github_repo":
+    
+    if task == "clean_workspace":
+        api_name = sys.argv[2]
+        clean_workspace(api_name)
+    elif task == "create_github_repo":
         api_name, github_token, github_user = sys.argv[2], sys.argv[3], sys.argv[4]
         create_github_repo(api_name, github_token, github_user)
     elif task == "clone_and_prepare_template":
         api_name, template_url = sys.argv[2], sys.argv[3]
         clone_and_prepare_template(api_name, template_url)
+    elif task == "extract_template":
+        destination_dir = sys.argv[2]
+        extract_template(destination_dir)
+    elif task == "modify_xml_file":
+        api_name, repo_dir, base_path, target_server_name, hostname, port, environment = sys.argv[2:]
+        modify_xml_file(api_name, repo_dir, base_path, target_server_name, hostname, port, environment)
     elif task == "generate_config_json":
         api_name, repo_dir, base_path, target_server_name, hostname, port, environment = sys.argv[2:]
         generate_config_json(api_name, repo_dir, base_path, target_server_name, hostname, port, environment)
     elif task == "zip_apiproxy":
         api_name, repo_dir = sys.argv[2], sys.argv[3]
         zip_apiproxy(api_name, repo_dir)
+    elif task == "initialize_repo":
+        repo_dir, github_token, repo_url = sys.argv[2], sys.argv[3], sys.argv[4]
+        initialize_repo(repo_dir, github_token, repo_url)
+    elif task == "push_to_feature_branch":
+        repo_dir, feature_branch, commit_message = sys.argv[2], sys.argv[3], sys.argv[4]
+        push_to_feature_branch(repo_dir, feature_branch, commit_message)
